@@ -153,16 +153,39 @@ function renderResult(isbn, data) {
     const statusTd = document.getElementById(`status-${isbn}`);
     const linkTd = document.getElementById(`link-${isbn}`);
     
-    const libData = data.libkey[systemId];
+    // データ構造の掘り下げ: data.books[isbn][systemId]
+    const bookData = data.books && data.books[isbn] ? data.books[isbn][systemId] : null;
     
-    if (!libData) {
+    if (!bookData || !bookData.libkey) {
+        statusTd.innerText = "蔵書なし(または取得失敗)";
+        return;
+    }
+
+    // 各館の状況をまとめる（例：1館でも「貸出可」があれば「在庫あり」とする）
+    const libs = bookData.libkey;
+    const libNames = Object.keys(libs);
+    
+    if (libNames.length === 0) {
         statusTd.innerText = "蔵書なし";
     } else {
-        // カーリルの状態表記を分かりやすく変換
-        const statusMap = { 'OK': '蔵書あり', 'T貸出中': '貸出中', '蔵書あり': '蔵書あり', '貸出中': '貸出中' };
-        statusTd.innerText = statusMap[libData] || libData;
+        // 全館の状況をチェック
+        const statuses = Object.values(libs);
+        if (statuses.includes("貸出可") || statuses.includes("在庫あり") || statuses.includes("あり")) {
+            statusTd.innerText = "在庫あり";
+        } else if (statuses.every(s => s.includes("貸出中"))) {
+            statusTd.innerText = "全館貸出中";
+        } else {
+            // どれにも当てはまらない場合は最初の館の状態を表示してみる
+            statusTd.innerText = statuses[0];
+        }
     }
-    linkTd.innerHTML = `<a href="https://calil.jp/book/${isbn}" target="_blank">予約</a>`;
+
+    // 予約URLの表示（APIの結果に含まれるURLを使用）
+    if (bookData.reserveurl) {
+        linkTd.innerHTML = `<a href="${bookData.reserveurl}" target="_blank">予約する</a>`;
+    } else {
+        linkTd.innerHTML = `<a href="https://calil.jp/book/${isbn}" target="_blank">詳細</a>`;
+    }
 }
 
 function copyToClipboard() {
