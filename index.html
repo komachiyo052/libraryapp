@@ -108,22 +108,30 @@ function addBookToList(isbn) {
 }
 
 // カーリルAPI呼び出し（JSONP + 自動リトライ対応）
+// リトライ回数をカウントする変数を追加（関数の外に置く）
+let retryCounts = {};
+
 function fetchLibraryStatus(isbn) {
     const apiKey = localStorage.getItem('calil_api_key');
     const systemId = localStorage.getItem('calil_system_id');
     
-    if (!apiKey || !systemId) {
-        document.getElementById(`status-${isbn}`).innerText = "設定不足";
-        return;
-    }
+    // リトライ回数の初期化
+    if (!retryCounts[isbn]) retryCounts[isbn] = 0;
+    retryCounts[isbn]++;
 
-    const callbackName = `callback_${isbn}_${Date.now()}`; // 重複防止
+    const callbackName = `callback_${isbn}_${Date.now()}`;
     
     window[callbackName] = function(data) {
         if (data.continue === 1) {
-            // 取得中の場合は2秒後に再試行
-            document.getElementById(`status-${isbn}`).innerText = "検索中...";
-            setTimeout(() => fetchLibraryStatus(isbn), 2000);
+            // リトライ回数を表示に出すことで「動いている感」を出す
+            document.getElementById(`status-${isbn}`).innerText = `検索中...(${retryCounts[isbn]}回目)`;
+            
+            // 最大15回（約30秒）でタイムアウトさせる
+            if (retryCounts[isbn] < 15) {
+                setTimeout(() => fetchLibraryStatus(isbn), 2000);
+            } else {
+                document.getElementById(`status-${isbn}`).innerText = "タイムアウト（図書館HPが重いようです）";
+            }
         } else {
             renderResult(isbn, data);
         }
@@ -131,7 +139,9 @@ function fetchLibraryStatus(isbn) {
         delete window[callbackName];
     };
 
-    const url = `https://api.calil.jp/check?appkey=${apiKey}&isbn=${isbn}&systemid=${systemId}&format=json&callback=${callbackName}`;
+    // 【重要】URLの末尾に &t=タイムスタンプ を追加してキャッシュを回避
+    const url = `https://api.calil.jp/check?appkey=${apiKey}&isbn=${isbn}&systemid=${systemId}&format=json&callback=${callbackName}&t=${Date.now()}`;
+    
     const script = document.createElement('script');
     script.id = `script-${isbn}`;
     script.src = url;
