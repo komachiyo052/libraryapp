@@ -21,7 +21,7 @@
 </head>
 <body>
 
-    <h2>📚 図書館蔵書スキャナー V.0.4</h2>
+    <h2>📚 図書館蔵書スキャナー V.0.5</h2>
 
     <div class="controls">
         <input type="text" id="pref-id" placeholder="自治体名 (例: 東京都)" value="東京都">
@@ -95,16 +95,45 @@ Quagga.onDetected(function(data) {
     }
 });
 
-function addBookToList(isbn) {
+// リストに本を追加（タイトル取得と在庫検索を同時に開始）
+async function addBookToList(isbn) {
     const tableBody = document.querySelector("#result-table tbody");
     const row = tableBody.insertRow(0);
     row.id = `row-${isbn}`;
+    
+    // 最初はISBNを表示しておき、タイトルが取れたら書き換える
     row.innerHTML = `
-        <td>${isbn}</td>
-        <td id="status-${isbn}">取得中...</td>
+        <td id="title-${isbn}">読み込み中...<br><small>${isbn}</small></td>
+        <td id="status-${isbn}">検索中...</td>
         <td id="link-${isbn}">-</td>
     `;
+
+    // 1. 本のタイトルを取得
+    fetchBookTitle(isbn);
+    // 2. 図書館の在庫を検索
     fetchLibraryStatus(isbn);
+}
+
+// Google Books APIを使ってタイトルを取得
+async function fetchBookTitle(isbn) {
+    try {
+        const response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`);
+        const data = await response.json();
+        
+        const titleElem = document.getElementById(`title-${isbn}`);
+        if (data.items && data.items.length > 0) {
+            const volumeInfo = data.items[0].volumeInfo;
+            const title = volumeInfo.title;
+            const authors = volumeInfo.authors ? volumeInfo.authors.join(', ') : '不明';
+            // タイトルと著者名を表示
+            titleElem.innerHTML = `<strong>${title}</strong><br><small>${authors}</small>`;
+        } else {
+            titleElem.innerText = `不明な本 (${isbn})`;
+        }
+    } catch (error) {
+        console.error("タイトル取得失敗:", error);
+        document.getElementById(`title-${isbn}`).innerText = `エラー (${isbn})`;
+    }
 }
 
 // カーリルAPI呼び出し（JSONP + 自動リトライ対応）
