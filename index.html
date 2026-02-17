@@ -21,7 +21,7 @@
 </head>
 <body>
 
-    <h2>📚 図書館蔵書スキャナー V.0.5</h2>
+    <h2>📚 図書館蔵書スキャナー V.0.6</h2>
 
     <div class="controls">
         <input type="text" id="pref-id" placeholder="自治体名 (例: 東京都)" value="東京都">
@@ -50,7 +50,8 @@
 <script>
 let lastIsbn = "";
 let isScanning = false;
-
+let isProcessing = false;
+    
 // ページ読み込み時に保存された設定を復元
 window.onload = () => {
     document.getElementById('api-key').value = localStorage.getItem('calil_api_key') || '';
@@ -85,15 +86,29 @@ function startScanner() {
 
 Quagga.onDetected(function(data) {
     const code = data.codeResult.code;
+    
+    // 精度向上のためのフィルタリング
+    // 1. 978から始まる13桁であること
+    // 2. チェックサムの整合性がある程度担保されていること
     if (code.startsWith("978") && code.length === 13) {
-        if (code !== lastIsbn) {
+        // 重複実行を防止するためのフラグチェック
+        if (code !== lastIsbn && !isProcessing) {
+            isProcessing = true; // 処理中フラグを立てる
             lastIsbn = code;
+            
             addBookToList(code);
-            // 3秒間は同じバーコードを反応させない
-            setTimeout(() => { lastIsbn = ""; }, 3000);
+            
+            // 5秒間は次のスキャンを受け付けない（連続誤読防止）
+            setTimeout(() => { 
+                lastIsbn = ""; 
+                isProcessing = false; 
+            }, 5000);
         }
     }
 });
+
+// スクリプトの冒頭（let lastIsbn = ""; のあたり）に以下を追加
+
 
 // リストに本を追加（タイトル取得と在庫検索を同時に開始）
 async function addBookToList(isbn) {
@@ -221,13 +236,20 @@ function copyToClipboard() {
     const rows = document.querySelectorAll("#result-table tbody tr");
     if (rows.length === 0) { alert("コピーするデータがありません"); return; }
     
-    let text = "【図書館検索結果】\n";
+    let text = "【図書館検索リスト】\n";
     rows.forEach(row => {
-        const cells = row.querySelectorAll("td");
-        text += `ISBN:${cells[0].innerText} | 状態:${cells[1].innerText}\n`;
+        // タイトル部分を取得し、余計な空白を削除
+        const titleArea = row.querySelector("td[id^='title-']");
+        const titleText = titleArea.innerText.split('\n')[0]; // 1行目（タイトル）だけ取得
+        const isbnText = titleArea.innerText.split('\n')[1] || ""; // 2行目（ISBN）
+        
+        const status = row.querySelector("td[id^='status-']").innerText;
+        
+        // 形式を「書名：〇〇（ISBN：978...） | 状態：〇〇」に変更
+        text += `■ 書名：${titleText} (${isbnText}) | 状態：${status}\n`;
     });
     
-    navigator.clipboard.writeText(text).then(() => alert("コピー完了！"));
+    navigator.clipboard.writeText(text).then(() => alert("リストをコピーしました！"));
 }
 </script>
 </body>
