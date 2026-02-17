@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>図書館蔵書スキャナー</title>
+    <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
+    <style>
+        body { font-family: sans-serif; margin: 0; padding: 20px; background: #f4f4f9; }
+        #interactive { width: 100%; height: 250px; background: #000; border-radius: 8px; overflow: hidden; position: relative; }
+        video { width: 100%; height: 100%; object-fit: cover; }
+        .controls { margin: 20px 0; display: flex; gap: 10px; flex-wrap: wrap; }
+        input, button { padding: 10px; font-size: 16px; border-radius: 5px; border: 1px solid #ccc; }
+        button { background: #007bff; color: white; cursor: pointer; border: none; }
+        button:hover { background: #0056b3; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background: #eee; }
+        .status-badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+    </style>
+</head>
+<body>
+
+    <h2>📚 図書館蔵書スキャナー</h2>
+
+    <div class="controls">
+        <input type="text" id="pref-id" placeholder="自治体名 (例: 東京都)" value="東京都">
+        <input type="text" id="api-key" placeholder="カーリルAPIキーを入力">
+    </div>
+
+    <div id="interactive" class="viewport"></div>
+
+    <div class="controls">
+        <button onclick="startScanner()">スキャン開始</button>
+        <button onclick="copyToClipboard()" style="background: #28a745;">結果をコピー</button>
+    </div>
+
+    <table id="result-table">
+        <thead>
+            <tr>
+                <th>ISBN</th>
+                <th>状態</th>
+                <th>リンク</th>
+            </tr>
+        </thead>
+        <tbody>
+            </tbody>
+    </table>
+
+<script>
+    let lastIsbn = "";
+    let isScanning = false;
+
+    // スキャナーの初期化
+    function startScanner() {
+        Quagga.init({
+            inputStream: {
+                name: "Live",
+                type: "LiveStream",
+                target: document.querySelector('#interactive'),
+                constraints: { facingMode: "environment" }
+            },
+            decoder: { readers: ["ean_reader"] } // ISBNはEAN(JAN)コード形式
+        }, function(err) {
+            if (err) { console.error(err); return; }
+            Quagga.start();
+            isScanning = true;
+        });
+    }
+
+    // バーコード検知時の処理
+    Quagga.onDetected(function(data) {
+        const code = data.codeResult.code;
+        
+        // 978から始まる13桁のISBNのみ対象
+        if (code.startsWith("978") && code.length === 13) {
+            if (code !== lastIsbn) {
+                lastIsbn = code;
+                addBookToList(code);
+                
+                // 連続スキャンのためのインターバル（3秒間は同じ本を読まない）
+                setTimeout(() => { lastIsbn = ""; }, 3000);
+            }
+        }
+    });
+
+    // リストに本を追加（ここでAPIを叩く想定）
+    function addBookToList(isbn) {
+        const tableBody = document.querySelector("#result-table tbody");
+        const row = tableBody.insertRow(0); // 新しいものを上に
+        
+        row.innerHTML = `
+            <td>${isbn}</td>
+            <td id="status-${isbn}">取得中...</td>
+            <td id="link-${isbn}">-</td>
+        `;
+
+        // 本来はここでカーリルAPIを呼び出す
+        fetchLibraryStatus(isbn);
+    }
+
+    // カーリルAPI呼び出し（スタブ）
+    async function fetchLibraryStatus(isbn) {
+        const apiKey = document.getElementById('api-key').value;
+        const pref = document.getElementById('pref-id').value;
+        
+        if (!apiKey) {
+            document.getElementById(`status-${isbn}`).innerText = "APIキー未入力";
+            return;
+        }
+
+        // 実際にはカーリルAPIのURLを叩く
+        // const url = `https://api.calil.jp/check?appkey=${apiKey}&isbn=${isbn}&systemid=${pref}&format=json&callback=no`;
+        
+        // 仮の表示（実際の実装ではfetchを使用）
+        setTimeout(() => {
+            document.getElementById(`status-${isbn}`).innerText = "蔵書あり";
+            document.getElementById(`link-${isbn}`).innerHTML = `<a href="https://calil.jp/book/${isbn}" target="_blank">予約ページへ</a>`;
+        }, 1000);
+    }
+
+    // クリップボードにコピー
+    function copyToClipboard() {
+        const rows = document.querySelectorAll("#result-table tbody tr");
+        let text = "【図書館検索結果リスト】\n";
+        rows.forEach(row => {
+            const cells = row.querySelectorAll("td");
+            text += `ISBN: ${cells[0].innerText} | 状態: ${cells[1].innerText}\n`;
+        });
+        navigator.clipboard.writeText(text).then(() => {
+            alert("クリップボードにコピーしました！");
+        });
+    }
+</script>
+</body>
+</html>
