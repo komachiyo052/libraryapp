@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>図書館蔵書スキャナー v1.0</title>
+    <title>図書館蔵書スキャナー v1.1</title>
     <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 15px; background: #f0f2f5; color: #333; }
         h2 { text-align: center; color: #1a73e8; margin-bottom: 15px; }
         
-        /* 設定エリア */
         .section { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 15px; }
         .input-group { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
         .pw-container { position: relative; flex-grow: 1; display: flex; }
@@ -20,12 +19,13 @@
         .btn-secondary { background: #6c757d; color: white; }
         .btn-success { background: #28a745; color: white; width: 100%; margin-top: 10px; }
         .btn-info { background: #17a2b8; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
 
-        /* スキャンエリア */
-        #interactive { width: 100%; height: 200px; background: #000; border-radius: 12px; overflow: hidden; position: relative; }
+        /* スキャンエリアの制御 */
+        #interactive { display: none; width: 100%; height: 250px; background: #000; border-radius: 12px; overflow: hidden; position: relative; margin-bottom: 10px; }
+        #interactive.active { display: block; }
         video { width: 100%; height: 100%; object-fit: cover; }
 
-        /* 結果テーブル */
         .table-container { overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; font-size: 13px; }
         th, td { border: 1px solid #eee; padding: 10px; text-align: left; }
@@ -58,7 +58,10 @@
     </div>
 
     <div id="interactive"></div>
-    <button class="btn-primary" onclick="startScanner()" style="width:100%; margin-top:10px; padding:15px;">カメラ起動・スキャン開始</button>
+    <div id="scanner-controls">
+        <button id="btn-start" class="btn-primary" onclick="startScanner()" style="width:100%; padding:15px; font-size: 16px;">🔍 バーコードをスキャンする</button>
+        <button id="btn-stop" class="btn-danger" onclick="stopScanner()" style="width:100%; padding:15px; display:none; font-size: 16px;">✕ スキャンを中止</button>
+    </div>
 
     <div class="section" style="margin-top:20px;">
         <button class="btn-success" onclick="copyToClipboard()">📋 結果をリスト形式でコピー</button>
@@ -68,30 +71,30 @@
                     <tr>
                         <th style="width:50%">本の内容</th>
                         <th style="width:30%">在庫状況</th>
-                        <th style="width:20%">リンク</th>
+                        <th style="width:20%">予約</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
             </table>
         </div>
     </div>
-<div class="section" style="background: #f8f9fa; border: 1px dashed #ccc; font-size: 13px; color: #666; margin-top: 30px;">
-    <h3 style="margin-top: 0; font-size: 15px; color: #333;">📖 使い方</h3>
-    <ol style="padding-left: 20px; line-height: 1.6;">
-        <li><strong>初期設定:</strong> <a href="https://calil.jp/doc/api.html" target="_blank">カーリルAPI</a>で取得したキーと、利用したい図書館の<a href="https://calil.jp/lib" target="_blank">システムID</a>を入力して「保存」します。</li>
-        <li><strong>スキャン:</strong> 「カメラ起動」を押し、本の裏にある<strong>上段のバーコード</strong>（978...）を枠内に収めます。</li>
-        <li><strong>手入力:</strong> バーコードが読み取りにくい場合は、13桁の数字を直接入力して検索も可能です。</li>
-        <li><strong>確認:</strong> リストに本が蓄積され、在庫状況と予約ページへのリンクが表示されます。</li>
-        <li><strong>共有:</strong> 「結果をコピー」を押すと、メモ帳やLINEなどにリストを貼り付けられます。</li>
-    </ol>
-    <p style="font-size: 11px; margin-bottom: 0;">※カメラが起動しない場合は、ブラウザの「カメラ使用許可」と、HTTPS接続（https://〜）を確認してください。</p>
-</div>
+
+    <div class="section" style="background: #f8f9fa; border: 1px dashed #ccc; font-size: 13px; color: #666; margin-top: 30px;">
+        <h3 style="margin-top: 0; font-size: 15px; color: #333;">📖 使い方</h3>
+        <ol style="padding-left: 20px; line-height: 1.6;">
+            <li><strong>初期設定:</strong> <a href="https://calil.jp/doc/api.html" target="_blank">カーリルAPIキー</a>と、利用したい図書館の<a href="https://calil.jp/lib" target="_blank">システムID</a>を入力して「保存」します。</li>
+            <li><strong>スキャン:</strong> 「スキャンする」を押すとカメラが起動します。本の裏の<strong>上段バーコード</strong>（978...）を読み取ると自動でカメラが閉じます。</li>
+            <li><strong>手入力:</strong> バーコードが読めない時は、13桁の数字を直接入力して検索できます。</li>
+            <li><strong>共有:</strong> 「結果をコピー」でリストを書き出し、メモ帳などに保存できます。</li>
+        </ol>
+        <p style="font-size: 11px; margin-bottom: 0;">※必ずHTTPS環境でご利用ください。カメラ起動にはブラウザの許可が必要です。</p>
+    </div>
+
 <script>
     let lastIsbn = "";
     let isProcessing = false;
     let retryCounts = {};
 
-    // ページロード時に設定を復元
     window.onload = () => {
         document.getElementById('api-key').value = localStorage.getItem('calil_api_key') || '';
         document.getElementById('pref-id').value = localStorage.getItem('calil_system_id') || '';
@@ -103,31 +106,40 @@
     }
 
     function saveSettings() {
-        const apiKey = document.getElementById('api-key').value;
-        const systemId = document.getElementById('pref-id').value;
-        localStorage.setItem('calil_api_key', apiKey);
-        localStorage.setItem('calil_system_id', systemId);
+        localStorage.setItem('calil_api_key', document.getElementById('api-key').value);
+        localStorage.setItem('calil_system_id', document.getElementById('pref-id').value);
         alert("設定を保存しました。");
     }
 
-    // スキャナー起動
+    // カメラ起動
     function startScanner() {
+        const container = document.getElementById('interactive');
+        container.classList.add('active');
+        document.getElementById('btn-start').style.display = 'none';
+        document.getElementById('btn-stop').style.display = 'block';
+
         Quagga.init({
             inputStream: {
                 name: "Live",
                 type: "LiveStream",
-                target: document.querySelector('#interactive'),
+                target: container,
                 constraints: { facingMode: "environment" }
             },
-            decoder: { 
-                readers: ["ean_reader"],
-                multiple: false 
-            },
+            decoder: { readers: ["ean_reader"], multiple: false },
             locate: true
         }, function(err) {
-            if (err) { alert("カメラエラー: " + err); return; }
+            if (err) { alert("カメラ起動失敗: " + err); stopScanner(); return; }
             Quagga.start();
         });
+    }
+
+    // カメラ停止
+    function stopScanner() {
+        Quagga.stop();
+        const container = document.getElementById('interactive');
+        container.classList.remove('active');
+        document.getElementById('btn-start').style.display = 'block';
+        document.getElementById('btn-stop').style.display = 'none';
     }
 
     Quagga.onDetected(function(data) {
@@ -136,9 +148,14 @@
             if (code !== lastIsbn && !isProcessing) {
                 isProcessing = true;
                 lastIsbn = code;
+                
+                // 成功時のフィードバック
+                if (navigator.vibrate) navigator.vibrate(200);
+                
                 addBookToList(code);
-                // 5秒間は同一ISBNをロック（誤読防止）
-                setTimeout(() => { lastIsbn = ""; isProcessing = false; }, 5000);
+                stopScanner(); // 読み取ったら自動で閉じる
+
+                setTimeout(() => { lastIsbn = ""; isProcessing = false; }, 3000);
             }
         }
     });
@@ -156,12 +173,12 @@
 
     async function addBookToList(isbn) {
         const tableBody = document.querySelector("#result-table tbody");
-        if (document.getElementById(`row-${isbn}`)) return; // 重複表示防止
+        if (document.getElementById(`row-${isbn}`)) return;
 
         const row = tableBody.insertRow(0);
         row.id = `row-${isbn}`;
         row.innerHTML = `
-            <td id="title-${isbn}"><small>読み込み中...<br>${isbn}</small></td>
+            <td id="title-${isbn}"><small>読込中...<br>${isbn}</small></td>
             <td id="status-${isbn}" class="status-loading">検索中...</td>
             <td id="link-${isbn}">-</td>
         `;
@@ -170,7 +187,6 @@
         fetchLibraryStatus(isbn);
     }
 
-    // Google Books APIでタイトル取得
     async function fetchBookTitle(isbn) {
         try {
             const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`);
@@ -185,12 +201,11 @@
         } catch (e) { console.error(e); }
     }
 
-    // カーリルAPI (JSONP + ポーリング + キャッシュ回避)
     function fetchLibraryStatus(isbn) {
         const apiKey = localStorage.getItem('calil_api_key');
         const systemId = localStorage.getItem('calil_system_id');
-        
         if (!apiKey || !systemId) return;
+
         if (!retryCounts[isbn]) retryCounts[isbn] = 0;
         retryCounts[isbn]++;
 
@@ -231,6 +246,8 @@
             }
             if (bookData.reserveurl) {
                 linkTd.innerHTML = `<a href="${bookData.reserveurl}" target="_blank">予約</a>`;
+            } else {
+                linkTd.innerHTML = `<a href="https://calil.jp/book/${isbn}" target="_blank">詳細</a>`;
             }
         }
     }
@@ -240,7 +257,8 @@
         if (rows.length === 0) return;
         let text = "【図書館検索リスト】\n";
         rows.forEach(row => {
-            const title = row.querySelector("td[id^='title-']").innerText.split('\n')[0];
+            const titleArea = row.querySelector("td[id^='title-']");
+            const title = titleArea.querySelector("strong") ? titleArea.querySelector("strong").innerText : "不明な本";
             const status = row.querySelector("td[id^='status-']").innerText;
             text += `■ ${title}：${status}\n`;
         });
